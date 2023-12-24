@@ -6,7 +6,7 @@ def clean_data(dataframe: pd.DataFrame):
 
 
 def main(data_folder: str):
-    # The ..data folder contains multiple directories
+    # The data folder contains multiple directories
     # Each directory is named with an index
     # Within each directory is a csv file named data.csv
     # Please read each csv file, store it as a pandas dataframe and pass the dataframe as an input to the clean_data function
@@ -22,4 +22,4 @@ def main(data_folder: str):
 
 if __name__ == '__main__':
     data_folder = "../data/"
-    main(data_folder=data_folder
+    main(data_folder=data_folder)
