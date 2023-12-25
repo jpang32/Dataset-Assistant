@@ -35,20 +35,82 @@ def get_file_metadata(file_id: str) -> dict:
     return parsed_metadata_response
 
 
+def format_file_metadata(file_metadata: dict) -> dict:
+    raw_columns = file_metadata["codeBook"]["dataDscr"]["var"]
+    if type(raw_columns) == dict:
+        raw_columns = [raw_columns]
+    result_columns = []
+
+    for raw_column in raw_columns:
+        result_column = {}
+        result_column["name"] = raw_column["@name"]
+
+        column_type = raw_column["varFormat"]["@type"]
+        if column_type == "numeric":
+            sum_stat = raw_column.get("sumStat", [])
+            acceptable_sum_stat_keys = ["max", "min", "mode", "medn", "mean", "stdDev"]
+            for stat in sum_stat:
+                if stat["@type"] in acceptable_sum_stat_keys:
+                    result_column[stat["@type"]] = stat["#text"]
+
+            if raw_column["@intrvl"] == "continuous":
+                result_column["type"] = "float"
+            else:
+                if sum_stat and all(x in ['0.0', '1.0'] for x in [result_column["max"], result_column["min"], result_column["mode"], result_column["medn"]]):
+                    result_column["type"] = "bool"
+                else:
+                    result_column["type"] = "int"
+
+        elif column_type == "character":
+            category = raw_column["varFormat"].get("@category")
+            if category == "date":
+                result_column["type"] = "date"
+            elif category == "time":
+                result_column["type"] = "time"
+            else:
+                result_column["type"] = "str"
+
+        if "type" not in result_column:
+            result_column["type"] = "other"
+
+        result_columns.append(result_column)
+
+
+    return {
+        "columns": result_columns,
+    }
+
+
 def main(title_search_terms: list):
     result = []
+    directory_count = 0
 
     for title_search_term in title_search_terms:
-        search_items = search_dataverse_for_datasets(title_search_term)
-        for item in search_items:
+        search_results = search_dataverse_for_datasets(title_search_term)
+        for item in search_results:
             dataset_id, version_id = get_dataset_id_and_version_id(item["global_id"])
             file_ids = get_file_ids_from_dataset(dataset_id, version_id)
+
+            formatted_file_metadata_list = []
+            retrieved_all_file_metadata_for_dataset = True
             for file_id in file_ids:
                 try:
                     file_metadata = get_file_metadata(file_id)
                 except Exception as e:
+                    retrieved_all_file_metadata_for_dataset = False
                     print(f"get_file_metadata failed: {e}.\n Skipping over this "
                           f"dataset.")
+                    break
+                formatted_file_metadata = format_file_metadata(file_metadata)
+                formatted_file_metadata_list.append(formatted_file_metadata)
+
+            # if retrieved_all_file_metadata_for_dataset:
+            #     if os.path.exists(f"../data/{directory_count}"):
+            #         os.system(f"rm -rf ../data/{directory_count}")
+            #     else:
+            #         os.system(f"mkdir ../data/{directory_count}")
+            #
+            #     directory_count += 1
 
     return result
 
