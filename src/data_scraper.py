@@ -15,8 +15,8 @@ def search_dataverse_for_datasets(title_search_term: str) -> list:
 def get_dataset_id_and_version_id(global_id: str) -> tuple[int, int]:
     dataset_url = f"{HARVARD_DATAVERSE_URL}/api/datasets/:persistentId/?persistentId={global_id}"
     dataset_response = requests.get(dataset_url).json()
-    dataset_id = dataset_response["data"]["id"]
-    version_id = dataset_response["data"]["latestVersion"]["versionNumber"]
+    dataset_id = dataset_response["data"].get("id")
+    version_id = dataset_response["data"].get("latestVersion", {}).get("versionNumber")
     return dataset_id, version_id
 
 
@@ -75,7 +75,6 @@ def format_file_metadata(file_metadata: dict) -> dict:
 
         result_columns.append(result_column)
 
-
     return {
         "columns": result_columns,
     }
@@ -88,29 +87,43 @@ def main(title_search_terms: list):
     for title_search_term in title_search_terms:
         search_results = search_dataverse_for_datasets(title_search_term)
         for item in search_results:
+            dataset_description = item.get("description")
+            if not dataset_description:
+                continue
+
             dataset_id, version_id = get_dataset_id_and_version_id(item["global_id"])
+            if not dataset_id or not version_id:
+                continue
             file_ids = get_file_ids_from_dataset(dataset_id, version_id)
 
             formatted_file_metadata_list = []
-            retrieved_all_file_metadata_for_dataset = True
             for file_id in file_ids:
+                file_metadata = None
                 try:
                     file_metadata = get_file_metadata(file_id)
                 except Exception as e:
-                    retrieved_all_file_metadata_for_dataset = False
                     print(f"get_file_metadata failed: {e}.\n Skipping over this "
                           f"dataset.")
-                    break
-                formatted_file_metadata = format_file_metadata(file_metadata)
-                formatted_file_metadata_list.append(formatted_file_metadata)
+                if file_metadata:
+                    formatted_file_metadata = format_file_metadata(file_metadata)
+                    formatted_file_metadata_list.append(formatted_file_metadata)
 
-            # if retrieved_all_file_metadata_for_dataset:
-            #     if os.path.exists(f"../data/{directory_count}"):
-            #         os.system(f"rm -rf ../data/{directory_count}")
-            #     else:
-            #         os.system(f"mkdir ../data/{directory_count}")
-            #
-            #     directory_count += 1
+            if formatted_file_metadata_list:
+                # If directory exists, clear all of its files (but keep the directory itself)
+                # else if it doesn't exist, create it
+                if os.path.exists(f"../data/{directory_count}"):
+                    for file in os.listdir(f"../data/{directory_count}"):
+                        os.remove(f"../data/{directory_count}/{file}")
+                else:
+                    os.mkdir(f"../data/{directory_count}")
+
+                # Write dataset description to file within directory named "desctiption.txt"
+                with open(f"../data/{directory_count}/description.txt", "w") as f:
+                    f.write(dataset_description)
+                with open(f"../data/{directory_count}/metadata.json", "w") as f:
+                    f.write(str(formatted_file_metadata_list))
+
+                directory_count += 1
 
     return result
 
@@ -119,7 +132,26 @@ if __name__ == '__main__':
     title_search_terms = [
         "covid19",
         "weather",
-        "medical"
+        "medical",
+        "health",
+        "crime",
+        "education",
+        "economy",
+        "finance",
+        "housing",
+        "transportation",
+        "sports",
+        "entertainment",
+        "social",
+        "demographics",
+        "population",
+        "environment",
+        "agriculture",
+        "food",
+        "energy",
+        "politics",
+        "government",
+        "military",
     ]
 
     main(title_search_terms)
